@@ -30,7 +30,22 @@ def getenv(var):
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
 api_id = getenv("ID")
+
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+
+# ----------------- PRIVATE AUTH USERS LOCK -----------------
+raw_auth = getenv("AUTH_USERS") or ""
+AUTH_USERS = [int(x.strip()) for x in raw_auth.split(",") if x.strip().isdigit()]
+
+@app.on_message(group=-1)
+def auth_guard(client: Client, message: Message):
+    if AUTH_USERS:
+        user_id = message.from_user.id if message.from_user else None
+        if user_id not in AUTH_USERS:
+            message.reply_text("⛔ **Access Denied!** Aap is bot ko use karne ke liye authorized nahi hain.")
+            message.stop_propagation()
+# -----------------------------------------------------------
+
 with app:
     app.set_bot_commands(
         [
@@ -69,23 +84,20 @@ def handleIndex(ele: str, message: Message, msg: Message):
 # URL regex pattern
 URL_REGEX = r'(?:(?:https?|ftp):\/\/)?[\w/\-?=%.]+\.[\w/\-?=%.]+'
 
-# Updated loopthread function
+# Loopthread function
 def loopthread(message: Message, otherss=False):
     urls = []
-    # Use message.caption for media (otherss=True), message.text for text messages (otherss=False)
     if otherss:
         texts = message.caption or ""
     else:
         texts = message.text or ""
 
-    # Check entities based on message type
     entities = []
     if otherss and hasattr(message, 'caption_entities') and message.caption_entities:
         entities = message.caption_entities
     elif message.entities:
         entities = message.entities
 
-    # Step 1: Extract URLs from entities
     if entities:
         for entity in entities:
             entity_type = str(entity.type)
@@ -98,19 +110,17 @@ def loopthread(message: Message, otherss=False):
                 if hasattr(entity, 'url') and entity.url:
                     urls.append(entity.url)
 
-    # Step 2: Fallback to text-based URL extraction
     extracted_urls = extractor.find_urls(texts)
     urls.extend(extracted_urls)
     regex_urls = re.findall(URL_REGEX, texts)
     urls.extend(regex_urls)
 
-    # Step 3: Clean and deduplicate URLs
     cleaned_urls = []
     for url in urls:
         cleaned_url = url.strip(".,").rstrip("/")
         if cleaned_url:
             cleaned_urls.append(cleaned_url)
-    urls = list(dict.fromkeys(cleaned_urls))  # Preserve order, remove duplicates
+    urls = list(dict.fromkeys(cleaned_urls))
     if not urls:
         app.send_message(
             message.chat.id,
@@ -119,7 +129,6 @@ def loopthread(message: Message, otherss=False):
         )
         return
 
-    # Step 4: Normalize URLs (add protocol if missing)
     normalized_urls = []
     for url in urls:
         if not url.startswith(('http://', 'https://')):
@@ -127,7 +136,6 @@ def loopthread(message: Message, otherss=False):
         normalized_urls.append(url)
     urls = normalized_urls
 
-    # Bypassing logic
     if bypasser.ispresent(bypasser.ddl.ddllist, urls[0]):
         msg: Message = app.send_message(
             message.chat.id, "⚡ __generating...__", reply_to_message_id=message.id
@@ -200,7 +208,6 @@ def loopthread(message: Message, otherss=False):
     end = time()
     print("Took " + "{:.2f}".format(end - strt) + "sec")
 
-    # Send bypassed links
     try:
         final = []
         tmp = ""
